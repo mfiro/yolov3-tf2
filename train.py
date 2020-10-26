@@ -43,6 +43,7 @@ flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
 flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weights` file if different, '
                      'useful in transfer learning with different number of classes')
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 def main(_argv):
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
