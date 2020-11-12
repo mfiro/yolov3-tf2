@@ -552,9 +552,6 @@ def mAP(gt_path, dr_path, img_path):
                 file_id = detection["file_id"]
                 # assign detection-results to ground truth object if any
                 # open ground-truth with that file_id
-                # gt_file = TEMP_FILES_PATH + "/" + file_id + "_ground_truth.json"
-                # gt_file = f"{TEMP_FILES_PATH}/gt/{file_id}.json"
-                # ground_truth_data = json.load(open(gt_file))
                 ground_truth_data = gt_data[file_id]
                 ovmax = -1
                 gt_match = -1
