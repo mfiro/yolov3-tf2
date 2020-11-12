@@ -350,7 +350,8 @@ def mAP(gt_path, dr_path, img_path):
     ## Create a ".temp_files/" and "output/" directory
     TEMP_FILES_PATH = ".temp_files"
     if not os.path.exists(TEMP_FILES_PATH): # if it doesn't exist already
-        os.makedirs(TEMP_FILES_PATH)
+        os.makedirs(f"{TEMP_FILES_PATH}/gt")
+        os.makedirs(f"{TEMP_FILES_PATH}/dr")
     output_files_path = "output"
     if os.path.exists(output_files_path): # if it exist already
         # reset the output directory
@@ -438,7 +439,8 @@ def mAP(gt_path, dr_path, img_path):
 
 
         # dump bounding_boxes into a ".json" file
-        new_temp_file = TEMP_FILES_PATH + "/" + file_id + "_ground_truth.json"
+        #new_temp_file = TEMP_FILES_PATH + "/" + file_id + "_ground_truth.json"
+        new_temp_file = f"{TEMP_FILES_PATH}/gt/{file_id}.json"
         gt_files.append(new_temp_file)
         with open(new_temp_file, 'w') as outfile:
             json.dump(bounding_boxes, outfile)
@@ -493,7 +495,7 @@ def mAP(gt_path, dr_path, img_path):
         for line in lines:
             try:
                 # DEBUG
-                confidence = random.uniform(0.4, 1)
+                confidence = random.uniform(0.6, 1)
                 tmp_class_name, left, top, right, bottom = line.split()
                 #tmp_class_name = ' '.join(line.split()[:-4])
                 #bbox = ' '.join(line.split()[-4:])
@@ -511,10 +513,20 @@ def mAP(gt_path, dr_path, img_path):
             bounding_boxes[tmp_class_name].append({"confidence":confidence, "file_id":file_id, "bbox":bbox})
 
     for class_name, bb in bounding_boxes.items():
-        with open(TEMP_FILES_PATH + "/" + class_name + "_dr.json", 'w') as outfile:
+        new_temp_file = f"{TEMP_FILES_PATH}/dr/{class_name}_dr.json"
+        with open(new_temp_file, 'w') as outfile:
             json.dump(bb, outfile)
 
     ## Calculate the AP for each class
+    # load all gt json files
+    gt_files = glob.glob(os.path.join(f"{TEMP_FILES_PATH}/gt/", "*.json"))
+    gt_data = dict()
+    for gt_file in gt_files:
+        file_id = gt_file.split(".json", 1)[0]
+        file_id = os.path.basename(os.path.normpath(file_id))
+        gt_data[file_id] = json.load(open(gt_file))
+
+
     sum_AP = 0.0
     ap_dictionary = {}
     lamr_dictionary = {}
@@ -526,7 +538,8 @@ def mAP(gt_path, dr_path, img_path):
             count_true_positives[class_name] = 0
 
             # Load detection-results of that class
-            dr_file = TEMP_FILES_PATH + "/" + class_name + "_dr.json"
+            # dr_file = TEMP_FILES_PATH + "/" + class_name + "_dr.json"
+            dr_file = f"{TEMP_FILES_PATH}/dr/{class_name}_dr.json"
             dr_data = json.load(open(dr_file))
 
             # Assign detection-results to ground-truth objects
@@ -537,8 +550,10 @@ def mAP(gt_path, dr_path, img_path):
                 file_id = detection["file_id"]
                 # assign detection-results to ground truth object if any
                 # open ground-truth with that file_id
-                gt_file = TEMP_FILES_PATH + "/" + file_id + "_ground_truth.json"
-                ground_truth_data = json.load(open(gt_file))
+                # gt_file = TEMP_FILES_PATH + "/" + file_id + "_ground_truth.json"
+                # gt_file = f"{TEMP_FILES_PATH}/gt/{file_id}.json"
+                # ground_truth_data = json.load(open(gt_file))
+                ground_truth_data = gt_data[file_id]
                 ovmax = -1
                 gt_match = -1
                 # load detected object bounding-box
