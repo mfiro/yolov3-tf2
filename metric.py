@@ -300,7 +300,7 @@ def draw_plot_func(dictionary, n_classes, window_title, plot_title, x_label, out
     plt.close()
 
 
-def mAP():
+def mAP(gt_path, dr_path, img_path):
     MINOVERLAP = 0.5 # default value (defined in the PASCAL VOC2012 challenge)
     '''
         0,0 ------> x (width)
@@ -318,10 +318,6 @@ def mAP():
     if args.set_class_iou is not None:
         specific_iou_flagged = True
 
-    gt_path = os.path.join(os.getcwd(), 'input', 'ground-truth')
-    dr_path = os.path.join(os.getcwd(), 'input', 'detection-results')
-    # if there are no images then no animation can be shown
-    img_path = os.path.join(os.getcwd(), 'input', 'images-optional')
     if os.path.exists(img_path): 
         for dirpath, dirnames, files in os.walk(img_path):
             if not files:
@@ -378,16 +374,21 @@ def mAP():
     counter_images_per_class = {}
 
     gt_files = []
+    # loops over ground truth files
     for txt_file in ground_truth_files_list:
         #print(txt_file)
         file_id = txt_file.split(".txt", 1)[0]
         file_id = os.path.basename(os.path.normpath(file_id))
         # check if there is a correspondent detection-results file
+
+        # DEBUG- Search for detection result (we don't have it)
+        # The point is that every ground truth should have it's 
         temp_path = os.path.join(dr_path, (file_id + ".txt"))
         if not os.path.exists(temp_path):
             error_msg = "Error. File not found: {}\n".format(temp_path)
             error_msg += "(You can avoid this error message by running extra/intersect-gt-and-dr.py)"
             error(error_msg)
+
         lines_list = file_lines_to_list(txt_file)
         # create ground-truth dictionary
         bounding_boxes = []
@@ -398,8 +399,14 @@ def mAP():
                 if "difficult" in line:
                         class_name, left, top, right, bottom, _difficult = line.split()
                         is_difficult = True
+                        bbox = left + " " + top + " " + right + " " +bottom
                 else:
-                        class_name, left, top, right, bottom = line.split()
+                        #class_name, left, top, right, bottom = line.split()
+                        # This solves the problem with space
+                        class_name = ' '.join(line.split()[:-4])
+                        bbox = ' '.join(line.split()[-4:])
+
+
             except ValueError:
                 error_msg = "Error: File " + txt_file + " in the wrong format.\n"
                 error_msg += " Expected: <class_name> <left> <top> <right> <bottom> ['difficult']\n"
@@ -408,7 +415,7 @@ def mAP():
                 error_msg += "by running the script \"remove_space.py\" or \"rename_class.py\" in the \"extra/\" folder."
                 error(error_msg)
 
-            bbox = left + " " + top + " " + right + " " +bottom
+            #bbox = left + " " + top + " " + right + " " +bottom
             if is_difficult:
                 bounding_boxes.append({"class_name":class_name, "bbox":bbox, "used":False, "difficult":True})
                 is_difficult = False
@@ -473,42 +480,39 @@ def mAP():
     dr_files_list = glob.glob(dr_path + '/*.txt')
     dr_files_list.sort()
 
-    for class_index, class_name in enumerate(gt_classes):
-        bounding_boxes = []
-        for txt_file in dr_files_list:
-            #print(txt_file)
-            # the first time it checks if all the corresponding ground-truth files exist
-            file_id = txt_file.split(".txt",1)[0]
-            file_id = os.path.basename(os.path.normpath(file_id))
-            temp_path = os.path.join(gt_path, (file_id + ".txt"))
-            if class_index == 0:
-                if not os.path.exists(temp_path):
-                    error_msg = "Error. File not found: {}\n".format(temp_path)
-                    error_msg += "(You can avoid this error message by running extra/intersect-gt-and-dr.py)"
-                    error(error_msg)
-            lines = file_lines_to_list(txt_file)
-            for line in lines:
-                try:
-                    # DEBUG
-                    confidence = random.uniform(0.4, 1)
-                    tmp_class_name, left, top, right, bottom = line.split()
-                    #tmp_class_name, confidence, left, top, right, bottom = line.split()
-                    # END OF DEBUG
-                except ValueError:
-                    error_msg = "Error: File " + txt_file + " in the wrong format.\n"
-                    error_msg += " Expected: <class_name> <confidence> <left> <top> <right> <bottom>\n"
-                    error_msg += " Received: " + line
-                    error(error_msg)
-                if tmp_class_name == class_name:
-                    #print("match")
-                    bbox = left + " " + top + " " + right + " " +bottom
-                    bounding_boxes.append({"confidence":confidence, "file_id":file_id, "bbox":bbox})
-                    #print(bounding_boxes)
-        # sort detection-results by decreasing confidence
-        bounding_boxes.sort(key=lambda x:float(x['confidence']), reverse=True)
-        with open(TEMP_FILES_PATH + "/" + class_name + "_dr.json", 'w') as outfile:
-            json.dump(bounding_boxes, outfile)
+    bounding_boxes = dict.fromkeys(gt_classes, list())
+    for txt_file in dr_files_list:
+        file_id = txt_file.split(".txt",1)[0]
+        file_id = os.path.basename(os.path.normpath(file_id))
+        temp_path = os.path.join(gt_path, (file_id + ".txt"))
+        if not os.path.exists(temp_path):
+            error_msg = "Error. File not found: {}\n".format(temp_path)
+            error_msg += "(You can avoid this error message by running extra/intersect-gt-and-dr.py)"
+            error(error_msg)
+        lines = file_lines_to_list(txt_file)
+        for line in lines:
+            try:
+                # DEBUG
+                confidence = random.uniform(0.4, 1)
+                tmp_class_name, left, top, right, bottom = line.split()
+                #tmp_class_name = ' '.join(line.split()[:-4])
+                #bbox = ' '.join(line.split()[-4:])
 
+                # END OF DEBUG
+                #tmp_class_name, confidence, left, top, right, bottom = line.split() #uncomment this after debug
+
+            except ValueError:
+                error_msg = "Error: File " + txt_file + " in the wrong format.\n"
+                error_msg += " Expected: <class_name> <confidence> <left> <top> <right> <bottom>\n"
+                error_msg += " Received: " + line
+                error(error_msg)
+
+            bbox = left + " " + top + " " + right + " " +bottom
+            bounding_boxes[tmp_class_name].append({"confidence":confidence, "file_id":file_id, "bbox":bbox})
+
+    for class_name, bb in bounding_boxes.items():
+        with open(TEMP_FILES_PATH + "/" + class_name + "_dr.json", 'w') as outfile:
+            json.dump(bb, outfile)
 
     ## Calculate the AP for each class
     sum_AP = 0.0
@@ -520,15 +524,12 @@ def mAP():
         count_true_positives = {}
         for class_index, class_name in enumerate(gt_classes):
             count_true_positives[class_name] = 0
-            """
-            Load detection-results of that class
-            """
+
+            # Load detection-results of that class
             dr_file = TEMP_FILES_PATH + "/" + class_name + "_dr.json"
             dr_data = json.load(open(dr_file))
 
-            """
-            Assign detection-results to ground-truth objects
-            """
+            # Assign detection-results to ground-truth objects
             nd = len(dr_data)
             tp = [0] * nd # creates an array of zeros of size nd
             fp = [0] * nd
@@ -797,7 +798,11 @@ def mAP():
 
 
 def main():
-    mAP()
+    gt_path = os.path.join(os.getcwd(), 'input', 'ground-truth')
+    dr_path = os.path.join(os.getcwd(), 'input', 'detection-results')
+    # if there are no images then no animation can be shown
+    img_path = os.path.join(os.getcwd(), 'input', 'images-optional')
+    mAP(gt_path, dr_path, img_path)
     #output_path = "./dataset/txt_annotations/val/"
     #xml_path = "./dataset/annotations/val/"
     #generate_txt_annot(output_path, xml_path)
