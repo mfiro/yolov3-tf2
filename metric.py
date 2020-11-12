@@ -14,6 +14,7 @@ import math
 
 import numpy as np
 import random #remove this later
+random.seed(10)
 from matplotlib import pyplot as plt
 
 # This file is originally from https://github.com/Cartucho/mAP
@@ -482,7 +483,7 @@ def mAP(gt_path, dr_path, img_path):
     dr_files_list = glob.glob(dr_path + '/*.txt')
     dr_files_list.sort()
 
-    bounding_boxes = dict.fromkeys(gt_classes, list())
+    bounding_boxes = {k:[] for k in gt_classes}
     for txt_file in dr_files_list:
         file_id = txt_file.split(".txt",1)[0]
         file_id = os.path.basename(os.path.normpath(file_id))
@@ -515,6 +516,7 @@ def mAP(gt_path, dr_path, img_path):
     for class_name, bb in bounding_boxes.items():
         new_temp_file = f"{TEMP_FILES_PATH}/dr/{class_name}_dr.json"
         with open(new_temp_file, 'w') as outfile:
+            bb.sort(key=lambda x:float(x['confidence']), reverse=True)
             json.dump(bb, outfile)
 
     ## Calculate the AP for each class
