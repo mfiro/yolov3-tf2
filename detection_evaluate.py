@@ -475,6 +475,8 @@ def evaluate(_argv):
     gt_path = "dataset/txt_annotations/val"
     img_path = "dataset/Images/val"
     JSON_PATH = "dataset/json_annotations"
+    output_files_path = "dataset/evaluate" # to save evaluation results
+
     gt_counter_per_class, counter_images_per_class, ground_truth_files_list = save_gt_as_json(gt_path, f"{JSON_PATH}/gt")
 
     gt_classes = list(gt_counter_per_class.keys())
@@ -483,6 +485,297 @@ def evaluate(_argv):
 
     # dr = detection results
     save_detections_as_json(img_path, gt_classes, f"{JSON_PATH}/dr")
+
+
+
+    gt_files = glob.glob(os.path.join(f"{JSON_PATH}/gt/", "*.json"))
+    gt_data = dict()
+    for gt_file in gt_files:
+        file_id = gt_file.split(".json", 1)[0]
+        file_id = os.path.basename(os.path.normpath(file_id))
+        gt_data[file_id] = json.load(open(gt_file))
+
+
+    sum_AP = 0.0
+    ap_dictionary = {}
+    lamr_dictionary = {}
+    # open file to store the output
+    with open(output_files_path + "/output.txt", 'w') as output_file:
+        output_file.write("# AP and precision/recall per class\n")
+        count_true_positives = {}
+        for class_index, class_name in enumerate(gt_classes):
+            count_true_positives[class_name] = 0
+
+            # Load detection-results of that class
+            # dr_file = TEMP_FILES_PATH + "/" + class_name + "_dr.json"
+            dr_file = f"{JSON_PATH}/dr/{class_name}_dr.json"
+            dr_data = json.load(open(dr_file))
+
+            # Assign detection-results to ground-truth objects
+            nd = len(dr_data)
+            tp = [0] * nd # creates an array of zeros of size nd
+            fp = [0] * nd
+            for idx, detection in enumerate(dr_data):
+                file_id = detection["file_id"]
+                # assign detection-results to ground truth object if any
+                # open ground-truth with that file_id
+                ground_truth_data = gt_data[file_id]
+                ovmax = -1
+                gt_match = -1
+                # load detected object bounding-box
+                bb = [ float(x) for x in detection["bbox"].split() ]
+                for obj in ground_truth_data:
+                    # look for a class_name match
+                    if obj["class_name"] == class_name:
+                        bbgt = [ float(x) for x in obj["bbox"].split() ]
+                        bi = [max(bb[0],bbgt[0]), max(bb[1],bbgt[1]), min(bb[2],bbgt[2]), min(bb[3],bbgt[3])]
+                        iw = bi[2] - bi[0] + 1
+                        ih = bi[3] - bi[1] + 1
+                        if iw > 0 and ih > 0:
+                            # compute overlap (IoU) = area of intersection / area of union
+                            ua = (bb[2] - bb[0] + 1) * (bb[3] - bb[1] + 1) + (bbgt[2] - bbgt[0]
+                                            + 1) * (bbgt[3] - bbgt[1] + 1) - iw * ih
+                            ov = iw * ih / ua
+                            if ov > ovmax:
+                                ovmax = ov
+                                gt_match = obj
+
+                # assign detection as true positive/don't care/false positive
+                # set minimum overlap
+                min_overlap = MINOVERLAP
+                if specific_iou_flagged:
+                    if class_name in specific_iou_classes:
+                        index = specific_iou_classes.index(class_name)
+                        min_overlap = float(iou_list[index])
+                if ovmax >= min_overlap:
+                    if "difficult" not in gt_match:
+                            if not bool(gt_match["used"]):
+                                # true positive
+                                tp[idx] = 1
+                                gt_match["used"] = True
+                                count_true_positives[class_name] += 1
+                                # update the ".json" file
+                                with open(gt_file, 'w') as f:
+                                        f.write(json.dumps(ground_truth_data))
+                            else:
+                                # false positive (multiple detection)
+                                fp[idx] = 1
+                else:
+                    # false positive
+                    fp[idx] = 1
+                    if ovmax > 0:
+                        status = "INSUFFICIENT OVERLAP"
+
+                """
+                Draw image to show animation
+                """
+
+            #print(tp)
+            # compute precision/recall
+            cumsum = 0
+            for idx, val in enumerate(fp):
+                fp[idx] += cumsum
+                cumsum += val
+            cumsum = 0
+            for idx, val in enumerate(tp):
+                tp[idx] += cumsum
+                cumsum += val
+            #print(tp)
+            rec = tp[:]
+            for idx, val in enumerate(tp):
+                rec[idx] = float(tp[idx]) / gt_counter_per_class[class_name]
+            #print(rec)
+            prec = tp[:]
+            for idx, val in enumerate(tp):
+                prec[idx] = float(tp[idx]) / (fp[idx] + tp[idx])
+            #print(prec)
+
+            ap, mrec, mprec = voc_ap(rec[:], prec[:])
+            sum_AP += ap
+            text = "{0:.2f}%".format(ap*100) + " = " + class_name + " AP " #class_name + " AP = {0:.2f}%".format(ap*100)
+            """
+            Write to output.txt
+            """
+            rounded_prec = [ '%.2f' % elem for elem in prec ]
+            rounded_rec = [ '%.2f' % elem for elem in rec ]
+            output_file.write(text + "\n Precision: " + str(rounded_prec) + "\n Recall :" + str(rounded_rec) + "\n\n")
+            if not args.quiet:
+                print(text)
+            ap_dictionary[class_name] = ap
+
+            n_images = counter_images_per_class[class_name]
+            lamr, mr, fppi = log_average_miss_rate(np.array(prec), np.array(rec), n_images)
+            lamr_dictionary[class_name] = lamr
+
+            """
+            Draw plot
+            """
+            if draw_plot:
+                plt.plot(rec, prec, '-o')
+                # add a new penultimate point to the list (mrec[-2], 0.0)
+                # since the last line segment (and respective area) do not affect the AP value
+                area_under_curve_x = mrec[:-1] + [mrec[-2]] + [mrec[-1]]
+                area_under_curve_y = mprec[:-1] + [0.0] + [mprec[-1]]
+                plt.fill_between(area_under_curve_x, 0, area_under_curve_y, alpha=0.2, edgecolor='r')
+                # set window title
+                fig = plt.gcf() # gcf - get current figure
+                fig.canvas.set_window_title('AP ' + class_name)
+                # set plot title
+                plt.title('class: ' + text)
+                #plt.suptitle('This is a somewhat long figure title', fontsize=16)
+                # set axis titles
+                plt.xlabel('Recall')
+                plt.ylabel('Precision')
+                # optional - set axes
+                axes = plt.gca() # gca - get current axes
+                axes.set_xlim([0.0,1.0])
+                axes.set_ylim([0.0,1.05]) # .05 to give some extra space
+                # Alternative option -> wait for button to be pressed
+                #while not plt.waitforbuttonpress(): pass # wait for key display
+                # Alternative option -> normal display
+                #plt.show()
+                # save the plot
+                fig.savefig(output_files_path + "/classes/" + class_name + ".png")
+                plt.cla() # clear axes for next plot
+
+        output_file.write("\n# mAP of all classes\n")
+        mAP = sum_AP / n_classes
+        text = "mAP = {0:.2f}%".format(mAP*100)
+        output_file.write(text + "\n")
+        print(text)
+
+    # remove the temp_files directory
+    # shutil.rmtree(TEMP_FILES_PATH)
+
+    ## Count total of detection-results
+    # iterate through all the files
+    det_counter_per_class = {}
+    for txt_file in dr_files_list:
+        # get lines to list
+        lines_list = file_lines_to_list(txt_file)
+        for line in lines_list:
+            class_name = line.split()[0]
+            # count that object
+            if class_name in det_counter_per_class:
+                det_counter_per_class[class_name] += 1
+            else:
+                # if class didn't exist yet
+                det_counter_per_class[class_name] = 1
+    #print(det_counter_per_class)
+    dr_classes = list(det_counter_per_class.keys())
+
+    ## Plot the total number of occurences of each class in the ground-truth
+    if draw_plot:
+        window_title = "ground-truth-info"
+        plot_title = "ground-truth\n"
+        plot_title += "(" + str(len(ground_truth_files_list)) + " files and " + str(n_classes) + " classes)"
+        x_label = "Number of objects per class"
+        output_path = output_files_path + "/ground-truth-info.png"
+        to_show = False
+        plot_color = 'forestgreen'
+        draw_plot_func(
+            gt_counter_per_class,
+            n_classes,
+            window_title,
+            plot_title,
+            x_label,
+            output_path,
+            to_show,
+            plot_color,
+            '',
+            )
+
+
+    ## Write number of ground-truth objects per class to results.txt
+    with open(output_files_path + "/output.txt", 'a') as output_file:
+        output_file.write("\n# Number of ground-truth objects per class\n")
+        for class_name in sorted(gt_counter_per_class):
+            output_file.write(class_name + ": " + str(gt_counter_per_class[class_name]) + "\n")
+
+
+    ## Finish counting true positives
+    for class_name in dr_classes:
+        # if class exists in detection-result but not in ground-truth then there are no true positives in that class
+        if class_name not in gt_classes:
+            count_true_positives[class_name] = 0
+    #print(count_true_positives)
+
+
+    ## Plot the total number of occurences of each class in the "detection-results" folder
+    if draw_plot:
+        window_title = "detection-results-info"
+        # Plot title
+        plot_title = "detection-results\n"
+        plot_title += "(" + str(len(dr_files_list)) + " files and "
+        count_non_zero_values_in_dictionary = sum(int(x) > 0 for x in list(det_counter_per_class.values()))
+        plot_title += str(count_non_zero_values_in_dictionary) + " detected classes)"
+        # end Plot title
+        x_label = "Number of objects per class"
+        output_path = output_files_path + "/detection-results-info.png"
+        to_show = False
+        plot_color = 'forestgreen'
+        true_p_bar = count_true_positives
+        draw_plot_func(
+            det_counter_per_class,
+            len(det_counter_per_class),
+            window_title,
+            plot_title,
+            x_label,
+            output_path,
+            to_show,
+            plot_color,
+            true_p_bar
+            )
+
+    ## Write number of detected objects per class to output.txt
+    with open(output_files_path + "/output.txt", 'a') as output_file:
+        output_file.write("\n# Number of detected objects per class\n")
+        for class_name in sorted(dr_classes):
+            n_det = det_counter_per_class[class_name]
+            text = class_name + ": " + str(n_det)
+            text += " (tp:" + str(count_true_positives[class_name]) + ""
+            text += ", fp:" + str(n_det - count_true_positives[class_name]) + ")\n"
+            output_file.write(text)
+
+    ## Draw log-average miss rate plot (Show lamr of all classes in decreasing order)
+    if draw_plot:
+        window_title = "lamr"
+        plot_title = "log-average miss rate"
+        x_label = "log-average miss rate"
+        output_path = output_files_path + "/lamr.png"
+        to_show = False
+        plot_color = 'royalblue'
+        draw_plot_func(
+            lamr_dictionary,
+            n_classes,
+            window_title,
+            plot_title,
+            x_label,
+            output_path,
+            to_show,
+            plot_color,
+            ""
+            )
+
+    ## Draw mAP plot (Show AP's of all classes in decreasing order)
+    if draw_plot:
+        window_title = "mAP"
+        plot_title = "mAP = {0:.2f}%".format(mAP*100)
+        x_label = "Average Precision"
+        output_path = output_files_path + "/mAP.png"
+        to_show = True
+        plot_color = 'royalblue'
+        draw_plot_func(
+            ap_dictionary,
+            n_classes,
+            window_title,
+            plot_title,
+            x_label,
+            output_path,
+            to_show,
+            plot_color,
+            ""
+            )
 
 
 if __name__ == '__main__':
