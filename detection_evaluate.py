@@ -419,7 +419,7 @@ def save_detections_as_json(img_path, gt_classes, output_path):
     bounding_boxes = {k:[] for k in gt_classes}
     cities = glob.glob(f"{img_path}/*/") # subdirectory path in val folder
     t1 = int(time.time())
-
+    count_files = 0
     for city in cities:
         img_list = glob.glob(f"{city}/*") # subdirectory path
 
@@ -456,6 +456,7 @@ def save_detections_as_json(img_path, gt_classes, output_path):
             saving_path = os.path.join(img_output_path, os.path.basename(os.path.normpath(img_path)))
             cv2.imwrite(saving_path, img)
             logging.info('output saved to: {}'.format(saving_path))
+            count_files += 1
     
     t2 = int(time.time())
     logging.info('detection generation duration: {} second'.format(t2 - t1))
@@ -466,6 +467,8 @@ def save_detections_as_json(img_path, gt_classes, output_path):
         with open(new_temp_file, 'w') as outfile:
             bb.sort(key=lambda x:float(x['confidence']), reverse=True)
             json.dump(bb, outfile)
+    
+    return bounding_boxes, count_files
 
 
 def evaluate(_argv):
@@ -498,7 +501,7 @@ def evaluate(_argv):
 
     # dr = detection results
     dr_output_path = os.path.join(json_path, "dr")
-    save_detections_as_json(img_path, gt_classes, dr_output_path)
+    dr_bbox, n_detection_imgs = save_detections_as_json(img_path, gt_classes, dr_output_path)
 
 
     gt_files = glob.glob(os.path.join(gt_output_path, "*.json"))
@@ -662,19 +665,7 @@ def evaluate(_argv):
 
     ## Count total of detection-results
     # iterate through all the files
-    det_counter_per_class = {}
-    for txt_file in dr_files_list:
-        # get lines to list
-        lines_list = file_lines_to_list(txt_file)
-        for line in lines_list:
-            class_name = line.split()[0]
-            # count that object
-            if class_name in det_counter_per_class:
-                det_counter_per_class[class_name] += 1
-            else:
-                # if class didn't exist yet
-                det_counter_per_class[class_name] = 1
-    #print(det_counter_per_class)
+    det_counter_per_class = {k:len(v) for k, v in dr_bbox.items()}
     dr_classes = list(det_counter_per_class.keys())
 
     ## Plot the total number of occurences of each class in the ground-truth
@@ -719,7 +710,7 @@ def evaluate(_argv):
         window_title = "detection-results-info"
         # Plot title
         plot_title = "detection-results\n"
-        plot_title += "(" + str(len(dr_files_list)) + " files and "
+        plot_title += "(" + str(n_detection_imgs) + " files and "
         count_non_zero_values_in_dictionary = sum(int(x) > 0 for x in list(det_counter_per_class.values()))
         plot_title += str(count_non_zero_values_in_dictionary) + " detected classes)"
         # end Plot title
