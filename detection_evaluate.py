@@ -474,14 +474,15 @@ def evaluate(_argv):
         os.makedirs(output_files_path)
         os.makedirs(os.path.join(output_files_path, "classes"))
 
+    run_quiet = False
     debug_mode = True
     show_animation = False
     specific_iou_flagged = False
     draw_plot = True
 
     if debug_mode:
-        gt_path = "dataset/sample_images/val"
-        img_path = "dataset/sample_txt/val"
+        gt_path = "dataset/sample_txt/val"
+        img_path = "dataset/sample_images/val"
     else:
         gt_path = "dataset/txt_annotations/val"
         img_path = "dataset/Images/val"
@@ -500,8 +501,7 @@ def evaluate(_argv):
     save_detections_as_json(img_path, gt_classes, dr_output_path)
 
 
-
-    gt_files = glob.glob(os.path.join(f"{JSON_PATH}/gt/", "*.json"))
+    gt_files = glob.glob(os.path.join(gt_output_path, "*.json"))
     gt_data = dict()
     for gt_file in gt_files:
         file_id = gt_file.split(".json", 1)[0]
@@ -521,7 +521,7 @@ def evaluate(_argv):
 
             # Load detection-results of that class
             # dr_file = TEMP_FILES_PATH + "/" + class_name + "_dr.json"
-            dr_file = f"{JSON_PATH}/dr/{class_name}_dr.json"
+            dr_file = f"{dr_output_path}/{class_name}_dr.json"
             dr_data = json.load(open(dr_file))
 
             # Assign detection-results to ground-truth objects
@@ -612,7 +612,7 @@ def evaluate(_argv):
             rounded_prec = [ '%.2f' % elem for elem in prec ]
             rounded_rec = [ '%.2f' % elem for elem in rec ]
             output_file.write(text + "\n Precision: " + str(rounded_prec) + "\n Recall :" + str(rounded_rec) + "\n\n")
-            if not args.quiet:
+            if not run_quiet:
                 print(text)
             ap_dictionary[class_name] = ap
 
