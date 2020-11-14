@@ -442,7 +442,7 @@ def save_detections_as_json(img_path, gt_classes, output_path):
             for i in range(n_boxes):
                 class_name = class_names[int(classes[0][i])]
                 confidence = scores[0][i].numpy()
-
+                confidence = float(confidence)
                 x1y1 = np.array(boxes[0][i][:2] * wh).astype(np.int32)
                 x2y2 = np.array(boxes[0][i][2:] * wh).astype(np.int32)
                 bbox = list(x1y1) + list(x2y2) # convert to this format [xmin, ymin, xmax, ymax]
@@ -469,22 +469,35 @@ def save_detections_as_json(img_path, gt_classes, output_path):
 
 
 def evaluate(_argv):
+    output_files_path = "output"
+    if not os.path.exists(output_files_path): # if it doesn't exist already
+        os.makedirs(output_files_path)
+        os.makedirs(os.path.join(output_files_path, "classes"))
+
+    debug_mode = True
     show_animation = False
     specific_iou_flagged = False
     draw_plot = True
-    gt_path = "dataset/txt_annotations/val"
-    img_path = "dataset/Images/val"
-    JSON_PATH = "dataset/json_annotations"
-    output_files_path = "dataset/evaluate" # to save evaluation results
 
-    gt_counter_per_class, counter_images_per_class, ground_truth_files_list = save_gt_as_json(gt_path, f"{JSON_PATH}/gt")
+    if debug_mode:
+        gt_path = "dataset/sample_images/val"
+        img_path = "dataset/sample_txt/val"
+    else:
+        gt_path = "dataset/txt_annotations/val"
+        img_path = "dataset/Images/val"
+
+    json_path = os.path.join(output_files_path, "json_files")
+
+    gt_output_path = os.path.join(json_path, "gt")
+    gt_counter_per_class, counter_images_per_class, ground_truth_files_list = save_gt_as_json(gt_path, gt_output_path)
 
     gt_classes = list(gt_counter_per_class.keys())
     gt_classes = sorted(gt_classes)
     n_classes = len(gt_classes)
 
     # dr = detection results
-    save_detections_as_json(img_path, gt_classes, f"{JSON_PATH}/dr")
+    dr_output_path = os.path.join(json_path, "dr")
+    save_detections_as_json(img_path, gt_classes, dr_output_path)
 
 
 
@@ -779,6 +792,7 @@ def evaluate(_argv):
 
 
 if __name__ == '__main__':
+    MINOVERLAP = 0.5
     try:
         app.run(evaluate)
     except SystemExit:
