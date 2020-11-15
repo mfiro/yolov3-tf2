@@ -34,9 +34,17 @@ flags.DEFINE_string('weights', './checkpoints/yolov3_train_10.tf',
                     'path to weights file')
 flags.DEFINE_boolean('tiny', False, 'yolov3 or yolov3-tiny')
 flags.DEFINE_integer('size', 416, 'resize images to')
-flags.DEFINE_string('image', './data/cityscapes/val_images/frankfurt/frankfurt_000000_000294_leftImg8bit.png', 'path to input image')
-flags.DEFINE_string('output', './output.jpg', 'path to output image')
 flags.DEFINE_integer('num_classes', 9, 'number of classes in the model')
+
+# Evaluation arguments
+flags.DEFINE_string('output_files_path', './output', 'path for evaluation results')
+flags.DEFINE_string('gt_path', "./dataset/sample_txt/val", 'path to ground truth txt files')
+flags.DEFINE_string('img_path', "./dataset/sample_images/val", 'path to be detected images')
+
+flags.DEFINE_boolean('run_quiet', False, 'Run evaluation quiet or not')
+flags.DEFINE_boolean('debug_mode', True, 'Use 6 images to test')
+flags.DEFINE_boolean('draw_plot', True, 'Draw results plot or not')
+flags.DEFINE_boolean('specific_iou_flagged', False, 'Use specific iou')
 
 
 def generate_txt_annot(output_path, xml_path):
@@ -485,7 +493,13 @@ def save_detections_as_json(img_path, gt_classes, output_path):
 
 
 def evaluate(_argv):
-    output_files_path = "output"
+    # output_files_path = "output"
+    output_files_path = FLAGS.output_files_path
+    run_quiet = FLAGS.run_quiet
+    debug_mode = FLAGS.debug_mode
+    specific_iou_flagged = FLAGS.specific_iou_flagged
+    draw_plot = FLAGS.draw_plot
+    
     if os.path.exists(output_files_path): # if it exist already
         # reset the output directory
         shutil.rmtree(output_files_path)
@@ -493,12 +507,6 @@ def evaluate(_argv):
     # create emtpy directories
     os.makedirs(output_files_path)
     os.makedirs(os.path.join(output_files_path, "classes"))
-
-    run_quiet = False
-    debug_mode = True
-    show_animation = False
-    specific_iou_flagged = False
-    draw_plot = True
 
     if debug_mode:
         gt_path = "dataset/sample_txt/val"
