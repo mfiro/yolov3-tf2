@@ -494,7 +494,6 @@ def evaluate(_argv):
     os.makedirs(output_files_path)
     os.makedirs(os.path.join(output_files_path, "classes"))
 
-
     run_quiet = False
     debug_mode = True
     show_animation = False
@@ -509,10 +508,8 @@ def evaluate(_argv):
         img_path = "dataset/Images/val"
 
     json_path = os.path.join(output_files_path, "json_files")
-
     gt_output_path = os.path.join(json_path, "gt")
     gt_counter_per_class, counter_images_per_class, ground_truth_files_list = save_gt_as_json(gt_path, gt_output_path)
-
     gt_classes = list(gt_counter_per_class.keys())
     gt_classes = sorted(gt_classes)
     n_classes = len(gt_classes)
@@ -521,7 +518,6 @@ def evaluate(_argv):
     dr_output_path = os.path.join(json_path, "dr")
     dr_bbox, n_detection_imgs = save_detections_as_json(img_path, gt_classes, dr_output_path)
 
-
     gt_files = glob.glob(os.path.join(gt_output_path, "*.json"))
     gt_data = dict()
     for gt_file in gt_files:
@@ -529,10 +525,10 @@ def evaluate(_argv):
         file_id = os.path.basename(os.path.normpath(file_id))
         gt_data[file_id] = json.load(open(gt_file))
 
-
     sum_AP = 0.0
     ap_dictionary = {}
     lamr_dictionary = {}
+
     # open file to store the output
     with open(output_files_path + "/output.txt", 'w') as output_file:
         output_file.write("# AP and precision/recall per class\n")
@@ -541,7 +537,6 @@ def evaluate(_argv):
             count_true_positives[class_name] = 0
 
             # Load detection-results of that class
-            # dr_file = TEMP_FILES_PATH + "/" + class_name + "_dr.json"
             dr_file = f"{dr_output_path}/{class_name}_dr.json"
             dr_data = json.load(open(dr_file))
 
@@ -551,6 +546,7 @@ def evaluate(_argv):
             fp = [0] * nd
             for idx, detection in enumerate(dr_data):
                 file_id = detection["file_id"]
+
                 # assign detection-results to ground truth object if any
                 # open ground-truth with that file_id
                 ground_truth_data = gt_data[file_id]
@@ -600,10 +596,6 @@ def evaluate(_argv):
                     if ovmax > 0:
                         status = "INSUFFICIENT OVERLAP"
 
-                """
-                Draw image to show animation
-                """
-
             #print(tp)
             # compute precision/recall
             cumsum = 0
@@ -627,9 +619,8 @@ def evaluate(_argv):
             ap, mrec, mprec = voc_ap(rec[:], prec[:])
             sum_AP += ap
             text = "{0:.2f}%".format(ap*100) + " = " + class_name + " AP " #class_name + " AP = {0:.2f}%".format(ap*100)
-            """
-            Write to output.txt
-            """
+
+            ## Write to output.txt
             rounded_prec = [ '%.2f' % elem for elem in prec ]
             rounded_rec = [ '%.2f' % elem for elem in rec ]
             output_file.write(text + "\n Precision: " + str(rounded_prec) + "\n Recall :" + str(rounded_rec) + "\n\n")
@@ -641,9 +632,8 @@ def evaluate(_argv):
             lamr, mr, fppi = log_average_miss_rate(np.array(prec), np.array(rec), n_images)
             lamr_dictionary[class_name] = lamr
 
-            """
-            Draw plot
-            """
+
+            ## Draw plot
             if draw_plot:
                 plt.plot(rec, prec, '-o')
                 # add a new penultimate point to the list (mrec[-2], 0.0)
@@ -678,9 +668,6 @@ def evaluate(_argv):
         output_file.write(text + "\n")
         print(text)
 
-    # remove the temp_files directory
-    # shutil.rmtree(TEMP_FILES_PATH)
-
     ## Count total of detection-results
     # iterate through all the files
     det_counter_per_class = {k:len(v) for k, v in dr_bbox.items()}
@@ -707,13 +694,11 @@ def evaluate(_argv):
             '',
             )
 
-
     ## Write number of ground-truth objects per class to results.txt
     with open(output_files_path + "/output.txt", 'a') as output_file:
         output_file.write("\n# Number of ground-truth objects per class\n")
         for class_name in sorted(gt_counter_per_class):
             output_file.write(class_name + ": " + str(gt_counter_per_class[class_name]) + "\n")
-
 
     ## Finish counting true positives
     for class_name in dr_classes:
@@ -721,7 +706,6 @@ def evaluate(_argv):
         if class_name not in gt_classes:
             count_true_positives[class_name] = 0
     #print(count_true_positives)
-
 
     ## Plot the total number of occurences of each class in the "detection-results" folder
     if draw_plot:
