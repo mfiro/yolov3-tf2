@@ -336,6 +336,7 @@ def save_gt_as_json(gt_path, output_path):
     counter_images_per_class = {}
 
     gt_files = []
+    all_bbox = [] # all bounding boxes
     # loops over ground truth files
     for txt_file in ground_truth_files_list:
         file_id = txt_file.split(".txt", 1)[0]
@@ -369,6 +370,7 @@ def save_gt_as_json(gt_path, output_path):
                 is_difficult = False
             else:
                 bounding_boxes.append({"class_name":class_name, "bbox":bbox, "used":False})
+                all_bbox.append({"file_id": file_id, "class_name": class_name, "bbox":bbox})
                 # count that object
                 if class_name in gt_counter_per_class:
                     gt_counter_per_class[class_name] += 1
@@ -390,6 +392,15 @@ def save_gt_as_json(gt_path, output_path):
         gt_files.append(output_file)
         with open(output_file, 'w') as outfile:
             json.dump(bounding_boxes, outfile)
+
+    # save also detections per class
+    for class_name in gt_counter_per_class.keys():
+        # search for class name
+        detections = [item for item in all_bbox if item["class_name"]==class_name]
+        output_file = os.path.join(output_path, f"{class_name}.json")
+        with open(output_file, 'w') as outfile:
+            json.dump(detections, outfile)
+    
 
     return gt_counter_per_class, counter_images_per_class, ground_truth_files_list
 
@@ -441,6 +452,8 @@ def save_detections_as_json(img_path, gt_classes, output_path):
             n_boxes = nums.numpy()[0]
             for i in range(n_boxes):
                 class_name = class_names[int(classes[0][i])]
+                if class_name not in gt_classes:
+                    continue
                 confidence = scores[0][i].numpy()
                 confidence = float(confidence)
                 x1y1 = np.array(boxes[0][i][:2] * wh).astype(np.int32)
@@ -473,9 +486,14 @@ def save_detections_as_json(img_path, gt_classes, output_path):
 
 def evaluate(_argv):
     output_files_path = "output"
-    if not os.path.exists(output_files_path): # if it doesn't exist already
-        os.makedirs(output_files_path)
-        os.makedirs(os.path.join(output_files_path, "classes"))
+    if os.path.exists(output_files_path): # if it exist already
+        # reset the output directory
+        shutil.rmtree(output_files_path)
+    
+    # create emtpy directories
+    os.makedirs(output_files_path)
+    os.makedirs(os.path.join(output_files_path, "classes"))
+
 
     run_quiet = False
     debug_mode = True
